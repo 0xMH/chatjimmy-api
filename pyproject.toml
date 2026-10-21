@@ -16,6 +16,9 @@ dependencies = [
     "requests>=2.28.0",
 ]
 
+[project.scripts]
+chatjimmy-server = "chatjimmy.server:main"
+
 [project.urls]
 Homepage = "https://github.com/0xMH/chatjimmy-api"
 Issues = "https://github.com/0xMH/chatjimmy-api/issues"

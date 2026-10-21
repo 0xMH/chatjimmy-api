@@ -160,10 +160,10 @@ class ChatJimmy:
             messages, model, system_prompt, top_k, attachment
         ):
             full_text += chunk_text
+            if chunk_text:
+                yield chunk_text
             if chunk_stats is not None:
                 stats = chunk_stats
-            else:
-                yield chunk_text
         return ChatResponse(text=full_text, stats=stats)
 
     def _chat_stream(
@@ -195,8 +195,30 @@ class ChatJimmy:
         r.raise_for_status()
 
         buffer = ""
+        stats_tag = "<|stats|>"
         for chunk in r.iter_content(chunk_size=256):
+            if not chunk:
+                continue
             buffer += chunk.decode("utf-8", errors="replace")
+
+            if stats_tag in buffer:
+                idx = buffer.index(stats_tag)
+                text_part = buffer[:idx]
+                if text_part:
+                    yield text_part, None
+                    buffer = buffer[idx:]
+            else:
+                prefix_len = 0
+                for i in range(min(len(buffer), len(stats_tag) - 1), 0, -1):
+                    if stats_tag.startswith(buffer[-i:]):
+                        prefix_len = i
+                        break
+
+                emit_len = len(buffer) - prefix_len
+                if emit_len > 0:
+                    emit_text = buffer[:emit_len]
+                    buffer = buffer[emit_len:]
+                    yield emit_text, None
 
         # Separate stats from text
         match = _STATS_RE.search(buffer)
@@ -206,9 +228,12 @@ class ChatJimmy:
                 stats = Stats.from_dict(json.loads(match.group(1)))
             except (json.JSONDecodeError, TypeError):
                 stats = None
-            yield text, stats
+            if text:
+                yield text, None
+            yield "", stats
         else:
-            yield buffer, None
+            if buffer:
+                yield buffer, None
 
     def ask(
         self,
